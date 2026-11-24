@@ -178,8 +178,8 @@ def has_results() -> bool:
     return any(RESULTS.glob("*-result.json"))
 
 
-def upload(allurectl: Path, endpoint: str, token: str, project_id: int, name: str, tags: str) -> int:
-    """Запускает allurectl upload и возвращает его код завершения."""
+def upload(allurectl: Path, endpoint: str, token: str, project_id: int, name: str, tags: str) -> tuple[int, str]:
+    """Запускает allurectl upload и возвращает его код завершения и вывод."""
     command = [
         str(allurectl),
         "upload",
@@ -191,7 +191,20 @@ def upload(allurectl: Path, endpoint: str, token: str, project_id: int, name: st
     ]
     # Токен передаётся переменной окружения, чтобы его не было видно в списке процессов.
     environment = dict(os.environ, ALLURE_TOKEN=token)
-    return subprocess.run(command, cwd=ROOT, env=environment).returncode
+    completed = subprocess.run(
+        command,
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return completed.returncode, f"{completed.stdout}\n{completed.stderr}"
+
+
+def print_without_usage(output: str) -> None:
+    """Печатает вывод allurectl без справки по командам, которую тот показывает при ошибке."""
+    print(output.split("\nUsage:", 1)[0].strip())
 
 
 def ask_connection_settings(args: argparse.Namespace) -> tuple[str, int, str]:
@@ -236,8 +249,10 @@ def main() -> int:
     launch_name = args.launch_name or default_launch_name(branch)
     launch_tags = "local" + (f",{branch}" if branch else "")
     print(f"Загружаю результаты в проект {project_id}, запуск «{launch_name}».", flush=True)
-    returncode = upload(allurectl, endpoint, token, project_id, launch_name, launch_tags)
+    returncode, output = upload(allurectl, endpoint, token, project_id, launch_name, launch_tags)
+    print_without_usage(output)
     if returncode != 0:
+        sys.stdout.flush()
         print("Загрузка не удалась. Причина — в сообщении allurectl выше.", file=sys.stderr)
         return returncode
     save_settings(endpoint, project_id)
