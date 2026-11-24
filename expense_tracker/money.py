@@ -11,4 +11,4 @@ def parse_amount(text: str) -> float:
 
 def format_amount(amount: float) -> str:
     """Выводит сумму с двумя знаками после запятой: 12.5 превращается в «12.50 руб.»."""
-    return f"{amount} руб."
+    return f"{amount:.2f} руб."

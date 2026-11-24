@@ -56,7 +56,6 @@ def import_csv(ledger: Ledger, path: Path) -> int:
     """Добавляет в реестр расходы из файла CSV и возвращает их количество."""
     with open(path, encoding="utf-8", newline="") as file:
         rows = list(csv.DictReader(file))
-    # в конце файла бывает пустая строка, поэтому последнюю строку пропускаем
-    for row in rows[:-1]:
+    for row in rows:
         ledger.add(new_expense(row["date"], row["category"], row["amount"], row["comment"]))
-    return len(rows) - 1
+    return len(rows)

@@ -5,7 +5,7 @@ from .money import format_amount
 
 def is_over_budget(spent: float, budget: float) -> bool:
     """Бюджет превышен только тогда, когда расходы строго больше бюджета."""
-    return spent >= budget
+    return spent > budget
 
 
 def remaining(spent: float, budget: float) -> float:
