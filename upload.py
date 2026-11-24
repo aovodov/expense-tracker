@@ -241,7 +241,8 @@ def main() -> int:
         print("Загрузка не удалась. Причина — в сообщении allurectl выше.", file=sys.stderr)
         return returncode
     save_settings(endpoint, project_id)
-    print("Готово. Откройте проект в Allure TestOps, раздел «Запуски» — там появился новый запуск.")
+    print("Готово. Отчёт о запуске — по ссылке в строке «Report link» выше.")
+    print("Все запуски — в Allure TestOps, в разделе «Запуски» проекта.")
     return 0
 
 
