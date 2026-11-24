@@ -1,0 +1,15 @@
+# виртуальное окружение и скачанная утилита allurectl
+.venv/
+.tools/
+
+# результаты автотестов
+allure-results/
+
+# адрес и ID проекта, которые запомнил upload.py
+.testops.json
+
+# расходы, добавленные через приложение
+expenses.json
+
+__pycache__/
+.pytest_cache/
