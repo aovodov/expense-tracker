@@ -7,6 +7,7 @@
 3. запускает `allurectl upload`.
 
 Запуск из папки проекта:  python upload.py   (на Windows:  py upload.py)
+Для локального практикума: python upload.py --practice
 
 Параметры можно задать заранее, тогда вопросов не будет:
   аргументами:           python upload.py --endpoint https://testops.example.com --project-id 124
@@ -24,8 +25,11 @@ import subprocess
 import sys
 import urllib.request
 import warnings
+from contextlib import nullcontext
 from datetime import datetime
 from pathlib import Path
+
+from practice_login import DEFAULT_ENDPOINT, practice_credentials
 
 ROOT = Path(__file__).resolve().parent
 RESULTS = ROOT / "allure-results"
@@ -42,7 +46,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Загружает результаты автотестов в Allure TestOps.")
     parser.add_argument("--endpoint", help="адрес инстанса Allure TestOps, например https://testops.example.com")
     parser.add_argument("--project-id", help="ID проекта в Allure TestOps")
-    parser.add_argument("--token", help="API-токен (безопаснее задавать переменной окружения ALLURE_TOKEN)")
+    authentication = parser.add_mutually_exclusive_group()
+    authentication.add_argument("--token", help="API-токен (безопаснее задавать переменной окружения ALLURE_TOKEN)")
+    authentication.add_argument(
+        "--practice",
+        action="store_true",
+        help="войти с логином и паролем и загрузить результаты в проект практикума",
+    )
     parser.add_argument("--launch-name", help="название запуска")
     parser.add_argument(
         "--check",
@@ -244,20 +254,36 @@ def main() -> int:
         print(f"В папке {RESULTS} нет результатов. Сначала запустите тесты: python run.py", file=sys.stderr)
         return 2
 
-    endpoint, project_id, token = ask_connection_settings(args)
+    if args.practice:
+        endpoint = normalize_endpoint(args.endpoint or DEFAULT_ENDPOINT)
+        project_id = parse_project_id(args.project_id) if args.project_id else None
+        if args.project_id and not project_id:
+            print("Укажите числовой ID проекта.", file=sys.stderr)
+            return EXIT_NOT_CONFIGURED
+        credentials = practice_credentials(endpoint, project_id)
+    else:
+        credentials = nullcontext(ask_connection_settings(args))
+
     branch = current_branch()
     launch_name = args.launch_name or default_launch_name(branch)
     launch_tags = "local" + (f",{branch}" if branch else "")
-    print(f"Загружаю результаты в проект {project_id}, запуск «{launch_name}».", flush=True)
-    returncode, output = upload(allurectl, endpoint, token, project_id, launch_name, launch_tags)
+    try:
+        with credentials as (endpoint, project_id, token):
+            print(f"Загружаю результаты в проект {project_id}, запуск «{launch_name}».", flush=True)
+            returncode, output = upload(allurectl, endpoint, token, project_id, launch_name, launch_tags)
+    except (RuntimeError, EOFError) as error:
+        print(str(error) or "Ввод прерван.", file=sys.stderr)
+        return EXIT_NOT_CONFIGURED
     print_without_usage(output)
     if returncode != 0:
         sys.stdout.flush()
         print("Загрузка не удалась. Причина — в сообщении allurectl выше.", file=sys.stderr)
         return returncode
-    save_settings(endpoint, project_id)
+    if not args.practice:
+        save_settings(endpoint, project_id)
     print("Готово. Отчёт о запуске — по ссылке в строке «Report link» выше.")
-    print("Все запуски — в Allure TestOps, в разделе «Запуски» проекта.")
+    if not args.practice:
+        print("Все запуски — в Allure TestOps, в разделе «Запуски» проекта.")
     return 0
 
 
