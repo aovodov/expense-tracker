@@ -1,0 +1,21 @@
+FROM jenkins/jenkins:2.580.3-lts
+
+# Python нужен джобе: автотесты проекта запускаются прямо в контейнере.
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 python3-venv rsync \
+    && rm -rf /var/lib/apt/lists/*
+USER jenkins
+
+COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+# Плагин ТестОпса кладётся файлом: в центре обновлений Jenkins его нет.
+COPY testops-jenkins.hpi /usr/share/jenkins/ref/plugins/testops-jenkins.hpi
+
+# Преднастройка: администратор, токен ТестОпса и сервер описаны в ci.py и ci/jenkins.yaml.
+COPY jenkins.yaml /usr/share/jenkins/ref/jenkins.yaml
+COPY allure-config.xml /usr/share/jenkins/ref/allure-config.xml
+COPY jobs/practice/config.xml /usr/share/jenkins/ref/jobs/practice/config.xml
+
+ENV CASC_JENKINS_CONFIG=/var/jenkins_home/jenkins.yaml
