@@ -17,6 +17,7 @@ import argparse
 import base64
 import http.cookiejar
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -129,8 +130,8 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def docker(*arguments: str, check: bool = True) -> str:
-    result = subprocess.run(["docker", *arguments], capture_output=True, text=True)
+def docker(*arguments: str, check: bool = True, env: dict[str, str] | None = None) -> str:
+    result = subprocess.run(["docker", *arguments], capture_output=True, text=True, env=env)
     if check and result.returncode != 0:
         sys.exit(f"Команда docker {' '.join(arguments)} не удалась:\n{result.stderr.strip()}")
     return result.stdout.strip()
@@ -141,6 +142,15 @@ def ensure_docker() -> None:
     if not version:
         sys.exit("Не удалось обратиться к Docker. Запустите Docker Desktop и повторите.")
     print(f"Docker {version}")
+
+
+def ensure_container_name_available() -> None:
+    existing = docker("container", "ls", "--all", "--quiet", "--filter", f"name=^/{CONTAINER}$")
+    if existing:
+        sys.exit(
+            f"Контейнер «{CONTAINER}» уже существует, даже если он остановлен. "
+            "Для нового прогона сначала освободите имя контейнера."
+        )
 
 
 def api(endpoint: str, token: str, method: str, path: str, body=None):
@@ -262,10 +272,11 @@ def start_container(port: int, password: str, token: str, keep: bool) -> None:
         "--add-host=host.docker.internal:host-gateway",
         "-v", f"{ROOT}:/home/project:ro",
         "-v", f"{VOLUME}:/var/jenkins_home",
-        "-e", f"JENKINS_ADMIN_PASSWORD={password}",
-        "-e", f"TESTOPS_TOKEN={token}",
+        "-e", "JENKINS_ADMIN_PASSWORD",
+        "-e", "TESTOPS_TOKEN",
         "-e", "JAVA_OPTS=-Djenkins.install.RunSetupWizard=false",
         IMAGE,
+        env=dict(os.environ, JENKINS_ADMIN_PASSWORD=password, TESTOPS_TOKEN=token),
     )
 
 
@@ -364,6 +375,8 @@ def allow_job_runs(testops, project_id: int, integration_id: int) -> None:
 def main() -> int:
     args = parse_args()
     ensure_docker()
+    if args.keep:
+        ensure_container_name_available()
     endpoint, project_id, token = ask_connection_settings(args)
     testops = lambda method, path, body=None: api(endpoint, token, method, path, body)  # noqa: E731
 
