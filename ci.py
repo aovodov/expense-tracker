@@ -126,7 +126,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--hpi", help="свой файл плагина ТестОпса (.hpi), например собранный из исходников")
     parser.add_argument("--skip-build", action="store_true", help="не запускать первую сборку и не помечать джобу")
-    parser.add_argument("--keep", action="store_true", help="не пересоздавать контейнер и данные Jenkins")
+    parser.add_argument("--keep", action="store_true", help="остановиться, если контейнер или том Jenkins уже существует")
     return parser.parse_args()
 
 
@@ -144,12 +144,18 @@ def ensure_docker() -> None:
     print(f"Docker {version}")
 
 
-def ensure_container_name_available() -> None:
+def ensure_jenkins_resources_available() -> None:
     existing = docker("container", "ls", "--all", "--quiet", "--filter", f"name=^/{CONTAINER}$")
     if existing:
         sys.exit(
             f"Контейнер «{CONTAINER}» уже существует, даже если он остановлен. "
             "Для нового прогона сначала освободите имя контейнера."
+        )
+
+    if VOLUME in docker("volume", "ls", "--quiet").splitlines():
+        sys.exit(
+            f"Том Jenkins «{VOLUME}» уже существует. В нём может быть конфигурация другого проекта ТестОпса. "
+            "Для нового прогона с --keep нужен свободный том."
         )
 
 
@@ -376,7 +382,7 @@ def main() -> int:
     args = parse_args()
     ensure_docker()
     if args.keep:
-        ensure_container_name_available()
+        ensure_jenkins_resources_available()
     endpoint, project_id, token = ask_connection_settings(args)
     testops = lambda method, path, body=None: api(endpoint, token, method, path, body)  # noqa: E731
 
